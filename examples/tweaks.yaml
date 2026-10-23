@@ -1,0 +1,91 @@
+# Standalone CLI configuration, schema version 1.
+# Guide: ../docs/CLI.md
+# Full tweak catalogue and options: ../docs/CLI-TWEAKS.md
+# This is a complete build request using only resources in this checkout.
+# All installer settings and options for the selected tweaks are explicit.
+# Omit a tweak to request no operation for it. YAML order is not execution order.
+
+schema_version: 1
+
+installer:
+  # Normal USB installer. Use run.sh for an already-installed autorun setup.
+  script_name: tweaks.sh
+
+  # Vehicle-side backup and confirmation settings.
+  keep_backups: true
+  test_backups: true
+  skip_confirmation: false
+
+  # Application placement and optional installer behavior.
+  apps_to_resources: false
+  retrieve_cmu_data: false
+  self_destruct: false
+
+tweaks:
+  # Simple installations have no additional options.
+  main_menu_loop:
+    action: install
+
+  list_loop:
+    action: install
+
+  shorter_delay:
+    action: install
+
+  # Removal uses the same tweak name with action: uninstall.
+  pause_on_mute:
+    action: uninstall
+
+  no_system_beeps:
+    action: uninstall
+
+  bigger_album_art:
+    action: install
+    options:
+      hide_artwork: false
+      full_width_titles: true
+
+  # true removes the named background overlay; false leaves it in place.
+  remove_overlays:
+    action: install
+    options:
+      buttons: true
+      now_playing: true
+      list_view: false
+      in_call: false
+      text_messages: false
+
+  # Asset paths are relative to this YAML file, not the shell's directory.
+  background:
+    action: install
+    options:
+      image: ../background-images/background_001.png
+
+  offscreen_background:
+    action: install
+    options:
+      image: ../background-images/default/OffScreenBackground.png
+
+  blank_album_art:
+    action: install
+    options:
+      image: ../background-images/blank-album-art/no_artwork_icon.png
+
+  # This theme archive is bundled in the repository and needs no download.
+  # Keep the explicit background above instead of the theme's background.
+  theme:
+    action: install
+    options:
+      archive: ../app/files/tweaks/config/themes/SmoothRed.zip
+      include_background: false
+
+  # Quote colors so YAML does not interpret the # character as a comment.
+  ui_style:
+    action: install
+    options:
+      body_color: "#ffffff"
+      list_color: "#ffffff"
+      disabled_color: "#929497"
+      title_color: "#ffffff"
+      radio_color: "#ffffff"
+      text_shadow: true

@@ -1,0 +1,27 @@
+{
+  "fragments": [
+    "00_intro.txt",
+    "00_start.txt",
+    "04_sensor-u.txt",
+    "10_pausemute-u.txt",
+    "19_speedo-u.txt",
+    "05_mainloop-i.txt",
+    "26_usbaudiomod-i.txt",
+    "14_bgart-i.txt",
+    "00_end.txt"
+  ],
+  "files": [
+    "tweaks.sh",
+    "cmu_dataretrieval.up",
+    "dataRetrieval_config.txt",
+    "jci-autoupdate",
+    "MZD_LOG.md",
+    "config/main-menu-loop/jci/gui/apps/system/controls/MainMenu/js/MainMenuCtrl.js",
+    "config/USBAudioMod/usbaudioApp.js",
+    "config/bigger-album-art/big-albm.css",
+    "config_org/transparent-parking-sensor/jci/nativegui/images/MiniView/Background_sm.png",
+    "config/bin/node",
+    "config/bin/remove_app_json.js",
+    "config_org/v70/opera.ini.org"
+  ]
+}

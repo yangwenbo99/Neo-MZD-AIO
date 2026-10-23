@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MZD-AIO · Configuration editor</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand-mark" aria-hidden="true">M</div>
+    <div><strong>MZD-AIO</strong><span class="brand-subtitle">Configuration editor</span></div>
+    <span class="offline-badge">LOCAL &amp; OFFLINE</span>
+    <a href="/reference" target="_blank" rel="noreferrer">Option reference ↗</a>
+  </header>
+  <section class="file-bar" aria-label="Configuration file">
+    <div class="file-path">
+      <label for="filename">CONFIGURATION FILE</label>
+      <div class="input-row"><input id="filename" spellcheck="false" autocomplete="off"><button id="set-path" data-operation>Set path</button></div>
+      <p id="base-directory">Connecting to local editor…</p>
+    </div>
+    <div class="file-actions">
+      <button id="open" data-operation>Open YAML</button>
+      <button id="example" data-operation>Use example</button>
+      <button id="save" class="primary" data-operation disabled>Save YAML</button>
+      <span id="file-status" role="status">New configuration</span>
+    </div>
+  </section>
+  <main id="workspace">
+    <aside class="catalog" aria-label="Tweak catalogue">
+      <div class="catalog-heading"><h1>Tweaks</h1><span id="selection-count">0 / 40</span></div>
+      <label class="sr-only" for="search">Search tweaks</label>
+      <input id="search" type="search" placeholder="Search tweaks…" autocomplete="off">
+      <label class="selected-filter"><input id="selected-only" type="checkbox"> Selected only</label>
+      <nav id="tweak-list" aria-label="Available tweaks"></nav>
+      <p id="no-results" hidden>No matching tweaks.</p>
+    </aside>
+    <section class="editor" aria-label="Settings editor">
+      <nav class="editor-tabs" aria-label="Settings sections">
+        <button id="installer-tab">Installer settings</button>
+        <button id="resources-tab">Resource packs</button>
+      </nav>
+      <div id="editor-content"></div>
+    </section>
+    <aside class="preview" aria-label="YAML preview">
+      <div class="preview-heading"><h2>YAML preview</h2><button id="copy" class="quiet">Copy</button></div>
+      <p class="muted">Only selected tweaks and explicit options are written. Other options use CLI defaults.</p>
+      <label class="sr-only" for="yaml">Generated YAML</label>
+      <textarea id="yaml" readonly spellcheck="false" wrap="off"></textarea>
+      <div id="validation" class="validation" role="status" aria-live="polite">Choose a tweak to get started.</div>
+      <button id="validate" data-operation>Check local resources</button>
+      <details id="plan-panel" hidden><summary>Validated build plan</summary><pre id="plan"></pre></details>
+      <p class="muted">Save the YAML, then build a USB package with:</p>
+      <code class="build-command">node cli/bin/mzd-aio.js build CONFIG --output ./installation</code>
+    </aside>
+  </main>
+  <dialog id="browser" aria-labelledby="browser-title">
+    <div class="dialog-heading"><h2 id="browser-title">Choose a local file</h2><button id="close-browser" aria-label="Close file browser">×</button></div>
+    <form id="browse-form" class="input-row"><label class="sr-only" for="browse-path">Directory</label><input id="browse-path" spellcheck="false"><button>Go</button></form>
+    <div class="browse-toolbar"><button id="browse-up">↑ Parent directory</button><button id="choose-directory" class="primary" hidden>Use this directory</button></div>
+    <p id="browse-error" class="error" role="status"></p>
+    <div id="browse-entries"></div>
+    <p class="muted">Files are on the computer running mzd-aio. Asset paths are saved relative to the configuration file.</p>
+  </dialog>
+</body>
+</html>

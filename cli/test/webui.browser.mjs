@@ -1,0 +1,184 @@
+// Optional real-browser smoke test: node cli/test/webui.browser.mjs
+// Uses installed Chromium and Node's built-in DevTools/WebSocket support.
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import { startWebUI } from '../src/webui.js'
+import { repoRoot } from '../src/resources.js'
+import { loadConfig, parseConfig } from '../src/config.js'
+
+// Keep the profile under the checkout, with a short enough Unix socket path.
+const temporary = path.join(repoRoot, 'tmp')
+await mkdir(temporary, { recursive: true })
+const directory = await mkdtemp(path.join(temporary, 'c-'))
+await mkdir(path.join(directory, 'home'))
+const editor = await startWebUI({ cwd: repoRoot })
+const browser = spawn(process.env.CHROMIUM || 'chromium', ['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-background-networking', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${path.join(directory, 'profile')}`, `--disk-cache-dir=${path.join(directory, 'cache')}`, `--crash-dumps-dir=${path.join(directory, 'crashes')}`, '--remote-debugging-port=0', 'about:blank'], {
+  cwd: repoRoot, env: { ...process.env, HOME: path.join(directory, 'home'), XDG_CONFIG_HOME: path.join(directory, 'config'), XDG_CACHE_HOME: path.join(directory, 'cache'), TMPDIR: directory }, stdio: ['ignore', 'ignore', 'pipe']
+})
+const exited = once(browser, 'exit')
+let socket
+try {
+  const endpoint = await new Promise((resolve, reject) => {
+    let output = ''
+    browser.stderr.on('data', chunk => { output += chunk; const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (match) resolve(match[1]) })
+    browser.once('error', reject)
+    browser.once('exit', () => reject(new Error(output)))
+  })
+  socket = new WebSocket(endpoint)
+  await once(socket, 'open')
+  let sequence = 0, sessionId
+  const pending = new Map()
+  const exceptions = []
+  socket.addEventListener('message', event => {
+    const message = JSON.parse(event.data)
+    if (message.method === 'Runtime.exceptionThrown') exceptions.push(message.params.exceptionDetails)
+    if (!message.id) return
+    const callback = pending.get(message.id)
+    pending.delete(message.id)
+    if (message.error) callback.reject(new Error(message.error.message))
+    else callback.resolve(message.result)
+  })
+  const send = (method, params = {}, session = sessionId) => new Promise((resolve, reject) => {
+    const id = ++sequence
+    pending.set(id, { resolve, reject })
+    socket.send(JSON.stringify({ id, method, params, ...(session ? { sessionId: session } : {}) }))
+  })
+  const { targetId } = await send('Target.createTarget', { url: 'about:blank' })
+  ;({ sessionId } = await send('Target.attachToTarget', { targetId, flatten: true }))
+  await send('Runtime.enable')
+  await send('Page.enable')
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1050, deviceScaleFactor: 1, mobile: false })
+  const evaluate = async expression => {
+    const value = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails))
+    return value.result.value
+  }
+  const wait = async expression => {
+    for (let attempt = 0; attempt < 150; attempt++) { if (await evaluate(expression)) return; await delay(50) }
+    throw new Error('Timed out waiting for ' + expression + '\n' + await evaluate("document.getElementById('validation')?.textContent + '\\n' + document.getElementById('file-status')?.textContent"))
+  }
+  const action = async (name, value) => {
+    await evaluate(`(() => { const select = document.querySelector('#tweak-list select[aria-label="Action for ${name}"]'); if (!select) throw new Error('Missing action ${name}'); select.value = ${JSON.stringify(value)}; select.dispatchEvent(new Event('change', {bubbles:true})); })()`)
+  }
+  const input = (selector, value, event = 'input') => evaluate(`(() => { const field = document.querySelector(${JSON.stringify(selector)}); if (!field) throw new Error('Missing field'); ${typeof value === 'boolean' ? `field.checked = ${value}` : `field.value = ${JSON.stringify(value)}`}; field.dispatchEvent(new Event(${JSON.stringify(event)}, {bubbles:true})); })()`)
+  const yaml = async () => parseConfig(await evaluate("document.getElementById('yaml').value"))
+  const valid = () => wait("!document.getElementById('save').disabled")
+  await send('Page.navigate', { url: editor.url })
+  await wait("document.querySelectorAll('#tweak-list .tweak-item').length === 40")
+  assert.equal(await evaluate("document.querySelector('[data-field=\"installer.keep_backups\"]').checked"), true)
+  await input('#filename', path.join(directory, 'edited.yaml'))
+  await evaluate("document.getElementById('set-path').click()")
+  await wait("document.getElementById('file-status').textContent.includes('path updated')")
+  await action('Main Menu Loop', 'install')
+  await valid()
+  assert.deepEqual(await yaml(), { schema_version: 1, tweaks: { main_menu_loop: { action: 'install' } } })
+  await evaluate("document.getElementById('installer-tab').click()")
+  await input('[data-field="installer.keep_backups"]', false, 'change')
+  await action('Touchscreen', 'install')
+  await input('[data-field="tweaks.touchscreen.options.enable_dvd"]', true, 'change')
+  await action('Touchscreen', 'uninstall')
+  await valid()
+  assert.deepEqual((await yaml()).tweaks.touchscreen, { action: 'uninstall' })
+  await action('Touchscreen', 'install')
+  assert.equal(await evaluate("document.querySelector('[data-field=\"tweaks.touchscreen.options.enable_dvd\"]').checked"), true)
+  await action('Touchscreen', '')
+
+  await action('Speedometer', 'install')
+  await input('[data-field="tweaks.speedometer.options.controls.bar.hold_left"]', 'toggle_statusbar', 'change')
+  await input('[data-field="tweaks.speedometer.options.bar_layout.engine_load[1]"]', 0)
+  await valid()
+  assert.deepEqual((await yaml()).tweaks.speedometer.options.bar_layout.engine_load, [2, 0, 0])
+  await evaluate("document.querySelector('[aria-label=\"Use default for tweaks.speedometer.options.bar_layout.engine_load\"]').click()")
+  await valid()
+  assert.equal((await yaml()).tweaks.speedometer.options.bar_layout, undefined)
+  await action('Message Replies', 'install')
+  await input('[aria-label="Reply language to add"]', 'US_English', 'change')
+  await evaluate("[...document.querySelectorAll('#editor-content button')].find(button => button.textContent === 'Add language').click()")
+  await input('[data-field="tweaks.message_replies.options.messages.US_English[0]"]', '')
+  await valid()
+  const replies = (await yaml()).tweaks.message_replies.options.messages.US_English
+  assert.equal(replies.length, 15)
+  assert.equal(replies[0], '')
+  assert.equal(replies[1], 'Yes')
+
+  await action('Background Rotator', 'install')
+  await input('[data-field="tweaks.background_rotator.options.images[0]"]', path.join(repoRoot, 'background-images/default/default.png'))
+  await input('[data-field="tweaks.background_rotator.options.images[1]"]', path.join(repoRoot, 'background-images/default/OffScreenBackground.png'))
+  await valid()
+  await action('Background Rotator', '')
+  await action('Background', 'install')
+  await evaluate("[...document.querySelectorAll('#editor-content button')].find(button => button.textContent === 'Browse').click()")
+  await wait("document.getElementById('browser').open && document.querySelector('#browse-entries button')")
+  await input('#browse-path', path.join(repoRoot, 'background-images/default'))
+  await evaluate("document.getElementById('browse-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))")
+  await wait("[...document.querySelectorAll('#browse-entries button')].some(button => button.textContent.trim() === 'default.png')")
+  await evaluate("[...document.querySelectorAll('#browse-entries button')].find(button => button.textContent.trim() === 'default.png').click()")
+  await wait("document.querySelector('.image-preview')?.naturalWidth > 0")
+  await valid()
+  assert.ok((await yaml()).tweaks.background.options.image.includes('background-images/default/default.png'))
+
+  await action('Theme', 'uninstall')
+  await action('Color Scheme', 'uninstall')
+  await wait("document.getElementById('validation').textContent.includes('mutually exclusive')")
+  assert.equal(await evaluate("document.getElementById('save').disabled"), true)
+  await action('Theme', '')
+  await action('Color Scheme', '')
+  await valid()
+  await evaluate("document.getElementById('save').click()")
+  await wait("document.getElementById('file-status').textContent.startsWith('Saved ')")
+  const saved = await loadConfig(path.join(directory, 'edited.yaml'))
+  assert.equal(saved.installer.keep_backups, false)
+  assert.equal(saved.tweaks.speedometer.options.controls.bar.hold_left, 'toggle_statusbar')
+  assert.equal(saved.tweaks.message_replies.options.messages.US_English[0], '')
+
+  await evaluate("document.getElementById('example').click()")
+  await wait("document.getElementById('selection-count').textContent === '12 / 40'")
+  await valid()
+  await evaluate("document.getElementById('validate').click()")
+  await wait("!document.getElementById('plan-panel').hidden")
+  await evaluate("document.getElementById('save').click()")
+  await wait("document.getElementById('file-status').textContent.startsWith('Saved ')")
+  assert.deepEqual(await loadConfig(path.join(directory, 'edited.yaml')), await loadConfig(path.join(repoRoot, 'examples/tweaks.yaml')))
+  await action('Main Menu Loop', 'uninstall')
+  await valid()
+  await evaluate("document.getElementById('open').click()")
+  await wait("document.getElementById('browser').open && [...document.querySelectorAll('#browse-entries button')].some(button => button.textContent.trim() === 'edited.yaml')")
+  await evaluate("[...document.querySelectorAll('#browse-entries button')].find(button => button.textContent.trim() === 'edited.yaml').click()")
+  await wait("document.getElementById('file-status').textContent === 'Configuration loaded'")
+  await valid()
+  assert.equal((await yaml()).tweaks.main_menu_loop.action, 'install')
+  await input('#search', 'album')
+  const matches = await evaluate("document.querySelectorAll('#tweak-list .tweak-item').length")
+  assert.ok(matches > 0 && matches < 40)
+  await input('#search', '')
+  await action('Bigger Album Art', 'install')
+  await valid()
+  // Open every registered form to catch unsupported descriptor shapes and DOM errors.
+  const available = await evaluate("[...document.querySelectorAll('#tweak-list .tweak-name')].map(button => button.textContent)")
+  for (const name of available) await action(name, 'install')
+  await evaluate("document.getElementById('example').click()")
+  await wait("document.getElementById('selection-count').textContent === '12 / 40'")
+  await valid()
+  await action('Bigger Album Art', 'install')
+  await valid()
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
+  const screenshot = await send('Page.captureScreenshot', { format: 'png' })
+  await writeFile(path.join(repoRoot, 'tmp/webui-desktop.png'), Buffer.from(screenshot.data, 'base64'))
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
+  const mobile = await send('Page.captureScreenshot', { format: 'png' })
+  await writeFile(path.join(repoRoot, 'tmp/webui-mobile.png'), Buffer.from(mobile.data, 'base64'))
+  assert.deepEqual(exceptions, [])
+  console.log('Browser smoke test passed: selection, defaults, nested options, messages, image browsing, conflicts, save/load, example validation, and desktop/mobile layout.')
+} finally {
+  socket?.close()
+  browser.kill('SIGTERM')
+  await exited.catch(() => {})
+  editor.server.closeAllConnections()
+  await new Promise(resolve => editor.server.close(resolve))
+  await rm(directory, { recursive: true, force: true })
+}
