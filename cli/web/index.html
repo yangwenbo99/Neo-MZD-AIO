@@ -30,23 +30,34 @@
   </section>
   <main id="workspace">
     <aside class="catalog" aria-label="Tweak catalogue">
+      <label for="package-kind" class="package-label">Package type</label>
+      <select id="package-kind">
+        <option value="tweaks">Ordinary tweaks</option>
+        <option value="install">CMU-autorun installer</option>
+        <option value="serial">Serial access (XX)</option>
+        <option value="dry_run">Autorun test (dry run)</option>
+      </select>
+      <p id="package-summary" class="description" hidden></p>
+      <div id="tweak-catalog">
       <div class="catalog-heading"><h1>Tweaks</h1><span id="selection-count">0 / 40</span></div>
       <label class="sr-only" for="search">Search tweaks</label>
       <input id="search" type="search" placeholder="Search tweaks…" autocomplete="off">
       <label class="selected-filter"><input id="selected-only" type="checkbox"> Selected only</label>
       <nav id="tweak-list" aria-label="Available tweaks"></nav>
       <p id="no-results" hidden>No matching tweaks.</p>
+      </div>
     </aside>
     <section class="editor" aria-label="Settings editor">
       <nav class="editor-tabs" aria-label="Settings sections">
         <button id="installer-tab">Installer settings</button>
         <button id="resources-tab">Resource packs</button>
+        <button id="autorun-tab" hidden>Autorun / Recovery</button>
       </nav>
       <div id="editor-content"></div>
     </section>
     <aside class="preview" aria-label="YAML preview">
       <div class="preview-heading"><h2>YAML preview</h2><button id="copy" class="quiet">Copy</button></div>
-      <p class="muted">Only selected tweaks and explicit options are written. Other options use CLI defaults.</p>
+      <p class="muted">The selected package type and explicit settings are written. Other options use CLI defaults.</p>
       <label class="sr-only" for="yaml">Generated YAML</label>
       <textarea id="yaml" readonly spellcheck="false" wrap="off"></textarea>
       <div id="validation" class="validation" role="status" aria-live="polite">Choose a tweak to get started.</div>

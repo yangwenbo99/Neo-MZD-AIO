@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { registry } from '../src/registry.js'
+import { registry, autorunSchema } from '../src/registry.js'
 import { loadConfig, describeOptions } from '../src/config.js'
 import { createPlan, validatePlan, formatPlan } from '../src/plan.js'
 import { buildPackage } from '../src/build.js'
 
 const usage = `Usage:
-  mzd-aio list [TWEAK]
+  mzd-aio list [TWEAK|autorun]
   mzd-aio validate CONFIG
   mzd-aio plan CONFIG
   mzd-aio build CONFIG --output DIRECTORY
@@ -34,6 +34,10 @@ try {
       const stop = () => { editor.server.close(); editor.server.closeAllConnections() }
       process.once('SIGINT', stop)
       process.once('SIGTERM', stop)
+    } else if (command === 'list' && argument === 'autorun') {
+      console.log('autorun [package] — CMU-autorun installer, ID7 recovery, serial XX, and autorun test packages')
+      console.log(describeOptions(autorunSchema).join('\n'))
+      console.log('  Use autorun instead of tweaks/installer/resources. See docs/CLI-TWEAKS.md for mode constraints.')
     } else if (command === 'list') {
       const names = argument ? [argument] : Object.keys(registry)
       for (const name of names) {
@@ -46,12 +50,13 @@ try {
           console.log('  See docs/CLI-TWEAKS.md for resource requirements and cross-option constraints.')
         }
       }
+      if (!argument) console.log('autorun [package] — CMU-autorun / ID7 recovery, automatic Wi-Fi AP, SSH-over-ADB, serial XX, and autorun tests; use list autorun')
     } else {
       if (!argument) throw new Error(`${command} requires a configuration file`)
       if (command === 'build' && !values.output?.trim()) throw new Error('build requires --output DIRECTORY')
       const config = await loadConfig(argument)
       const plan = await validatePlan(createPlan(config))
-      if (command === 'validate') console.log(`Valid: ${argument} (${Object.keys(config.tweaks).length} selected tweaks)`)
+      if (command === 'validate') console.log(`Valid: ${argument} (${config.autorun ? `autorun ${config.autorun.mode} package` : `${Object.keys(config.tweaks).length} selected tweaks`})`)
       else if (command === 'plan') console.log(formatPlan(plan))
       else {
         const output = await buildPackage(plan, values.output, { onProgress: message => console.error(message) })

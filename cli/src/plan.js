@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { registry, audioSources, colors, boots } from './registry.js'
 import { metricClass } from './speedometer.js'
+import { createAutorunPlan } from './autorun.js'
 import { repoRoot, tweakRoot, checkPath, checkImage, checkThemeDirectory, readZip } from './resources.js'
 
 const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`
@@ -59,6 +60,7 @@ const uninstallOrder = ['touchscreen', 'no_disclaimer', 'reverse_camera_warning'
 const installOrder = ['color_scheme', 'theme', 'touchscreen', 'no_disclaimer', 'reverse_camera_warning', 'transparent_parking_sensors', 'main_menu_loop', 'list_loop', 'shorter_delay', 'no_list_beeps', 'no_system_beeps', 'audio_source_order', 'pause_on_mute', 'speedometer', 'media_order_flac', 'castscreen_receiver', 'message_replies', 'boot_animation', 'usb_audio_mod', 'bigger_album_art', 'remove_overlays', 'video_player', 'aio_app', 'mzd_meter', 'fuel_consumption', 'android_auto', 'date_to_statusbar', 'statusbar', 'ui_style', 'main_menu', 'blank_album_art', 'diagnostic_menu', 'offscreen_background', 'background_rotator', 'background', 'sd_cid']
 
 export function createPlan (config) {
+  if (config.autorun) return createAutorunPlan(config)
   const steps = []
   const { tweaks } = config
   const selected = name => Boolean(tweaks[name])
@@ -179,7 +181,10 @@ export async function validatePlan (plan) {
 }
 
 export function formatPlan (plan) {
-  const lines = [`Output script: ${plan.config.installer.script_name}`, 'Package operations (script fragments execute in this order):']
+  const mode = plan.config.autorun?.mode
+  const lines = mode
+    ? [`Autorun/recovery package: ${mode}`, mode === 'serial' ? 'Output: XX/ (core files for manual serial installation)' : `Output script: ${mode === 'dry_run' ? 'run.sh' : 'tweaks.sh'}`, 'Package assembly operations:']
+    : [`Output script: ${plan.config.installer.script_name}`, 'Package operations (script fragments execute in this order):']
   plan.steps.forEach((step, index) => {
     const detail = step.kind === 'fragment' ? path.basename(step.source) : step.target
     lines.push(`${String(index + 1).padStart(3)}. ${step.label}${detail ? ` [${detail}]` : ''}`)

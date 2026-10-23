@@ -5,8 +5,10 @@ Names and defaults are grounded in the existing builder, option forms, and paylo
 
 ## Reading this reference
 
-All fields described below belong under `tweaks.NAME.options`, except the shared
-`resources` setting. `action` is required and follows the guide's action column.
+Ordinary tweak options belong under `tweaks.NAME.options`, except the shared
+`resources` setting. The separate [autorun package fields](#autorun-and-recovery-packages)
+belong under `autorun`. For ordinary tweaks, `action` is required and follows the
+guide's action column.
 An unselected tweak has no effect merely because its options have defaults.
 Uninstall entries accept only `action`; required uninstall resources are supplied
 through `resources` or bundled files. Omitted install options use the defaults here.
@@ -42,6 +44,8 @@ is accounted for under deferred features below.
 `backup_jci` is a full-directory backup operation, separate from
 `installer.keep_backups` and `installer.test_backups` for individual modified files.
 The Wi-Fi and SSH patches have no existing uninstall operation.
+
+`ssh_bringback` is needed for v.56 to access ssh.  You might want to replace `authorized_keys`
 
 ## Audio and message options
 
@@ -283,6 +287,11 @@ swap are outside this interface.
 | `gps_source` | `car`, `phone`. | `car` |
 | `reverse_heading` | Boolean; requires `gps_source: car`. | `false` |
 
+**Note:** the following things are known to interfere with wireless Android Auto on my car:
+- Bluetooth: it must be disabled, otherwise the connection quality is too poor to establish AA connection
+- Wifi Power Saving: it slightly affects stability.  Disable it using shell: `iw dev wlan0 set power_save off`
+- Wifi AP from car infotainment system: must be disabled.  Otherwise Wifi connection will fail.
+
 ### aio_app
 
 `screen_off_on_boot` is a boolean, default `false`.
@@ -451,6 +460,87 @@ controls:
 - Omitting a component requests no direct operation. Shared-file changes remain
   visible in `plan`; the builder does not inspect the vehicle's installed state.
 
+## Autorun and recovery packages
+
+These use the top-level `autorun` mapping and cannot be combined with `tweaks`,
+`installer`, or `resources`. The WebUI's **Package type** selector opens the same
+options under **Autorun / Recovery**. `mzd-aio list autorun` also lists the fields.
+
+| Field | Type / allowed values | Default / applicability |
+| --- | --- | --- |
+| `mode` | `install`, `serial`, `dry_run`. | `install` |
+| `id7_recovery` | Boolean; include the bundled ID7 recovery pack. | `true`; install mode only. Serial mode always includes ID7. |
+| `wifi_ap.enabled` | Boolean; include automatic Wi-Fi AP startup. | `false`; install and serial modes. |
+| `wifi_ap.ssid` | SSID of 1–32 UTF-8 bytes, without control characters. The `YourSSID` placeholder is rejected. | Required when AP is enabled. |
+| `wifi_ap.password` | WPA2 passphrase of 8–63 printable ASCII characters. The `YourSSIDpassword` placeholder is rejected. | Required when AP is enabled. |
+| `ssh_over_adb` | Boolean; include the ADB executable and SSH-over-ADB boot scripts. | `false`; install and serial modes. |
+| `include_dry_run` | Boolean; add the bundled success-dialog `run.sh` test. | `false`; install mode only. |
+| `skip_confirmation` | Boolean; skip the original install/uninstall and reboot prompts. | `false`; install mode only. |
+
+Fields outside their applicable modes are rejected, including explicitly supplied
+false values. In `dry_run` mode, `mode` is the only accepted field. Untouched
+defaults are omitted by the WebUI.
+
+### Installer and ID7 recovery
+
+`mode: install` copies the original CMU-autorun USB bootstrap, `autorun`, and
+`utils.sh`, and generates `tweaks.sh` from the bundled installer. With
+`skip_confirmation: false`, its original vehicle-side selection and reboot
+prompts are enabled. With `true`, it follows the original automatic install and
+reboot path. The installer replaces existing autorun/recovery script directories.
+
+The ID7 pack includes `02-run-tweaks-from-usb`, SSH/firewall startup, password and
+SSH-configuration recovery, and `44-recovery-recovery`. `id7_recovery: false`
+creates a basic autorun installer, optionally with AP and/or ADB scripts. The
+bundled payloads live under `app/files/tweaks/cmu-autorun/`.
+
+### Automatic Wi-Fi access point and SSH-over-ADB
+
+Automatic AP setup adds `02-start-wifiAP/` containing the boot hook, hostapd/DHCP
+script, and generated `wifiAP.config`. The bundled defaults are channel 9,
+802.11g, WPA2/AES, car IP `192.168.53.1`, and DHCP range
+`192.168.53.20`–`192.168.53.254`. This hosts a network rather than joining a phone
+hotspot; it is separate from the ordinary `enable_wifi` tweak and Android Auto's
+`wifi` transport option.
+
+```yaml
+schema_version: 1
+autorun:
+  mode: install
+  wifi_ap:
+    enabled: true
+    ssid: MyCarNetwork
+    password: replace-with-your-password
+```
+
+Credentials are shell-quoted in `wifiAP.config`; hostapd generation retains spaces
+and special characters literally. They are stored in the YAML and generated AP
+configuration, and omitted from plan/progress messages and the compilation log.
+
+`ssh_over_adb: true` adds `02-start-adb/` and the top-level vehicle-side `adb`
+binary. Its boot script runs the bundled bridge, which uses
+`adb reverse tcp:2222 tcp:22`. An Android device with USB debugging enabled can
+connect an SSH client to `localhost:2222`. The car must have SSH running; enabling
+ID7 recovery includes its SSH-startup scripts.
+
+### Serial-access XX and autorun tests
+
+`mode: serial` puts `autorun`, ID7 recovery, and optional AP/ADB payloads in `XX/`.
+It omits `tweaks.sh`, `run.sh`, `utils.sh`, and the USB bootstrap. Copy the `XX`
+folder to the USB root and follow the project's
+[serial-access instructions](https://mazdatweaks.com/serial/) and
+[firmware-specific ID7 instructions](https://mazdatweaks.com/id7/).
+
+`mode: dry_run` produces only the bundled `run.sh` success-dialog test and a build
+log. It requires an existing autorun setup to execute. `include_dry_run: true` in
+install mode adds the same test at the package root; it can be moved to a separate
+USB drive or SD card for testing after installation. It is a runtime check of
+autorun, not a simulation of changes on the car.
+
+See [the user guide](CLI.md#autorun-and-recovery-packages) and the examples
+[autorun.yaml](../examples/autorun.yaml), [serial.yaml](../examples/serial.yaml),
+and [autorun-test.yaml](../examples/autorun-test.yaml).
+
 ## Removed, dormant, and deferred features
 
 These account for features present in labels, option forms, or leftover payloads
@@ -466,7 +556,7 @@ that do not become extra supported actions in the initial catalogue.
 | Standalone Gracenote disabling | `config/disable_gracenote/` exists without an active tweak selection. Deferred; the USB Audio Mod's text setting is included. |
 | Standalone Node/CASDK support fragments | Legacy `00__node-i.txt` and related support fragments are not independent ordinary-tweak selections. Included only when a supported operation actually needs them; no standalone action. |
 | CASDK and CASDK applications | Separate installer branch. Deferred, including NA/EU selection, install/remove, apps-only mode, SD-card option, and the app selections listed below. |
-| Autorun/recovery package generation | Separate installer branch. Deferred, including ID7 recovery, automatic Wi-Fi AP configuration, SSH-over-ADB, dry-run payloads, and serial `XX` packages. Existing autorun users can still request `installer.script_name: run.sh` for ordinary tweaks. |
+| Autorun/recovery package generation | Implemented through the separate top-level `autorun` mapping documented above. Existing autorun users can also request `installer.script_name: run.sh` for ordinary tweaks. |
 | Full system restore | Separate `00___fullRestore.sh` workflow, including its delete-backups option. Deferred. |
 | GUI utilities and preferences | Translator, visual previews, image-joiner window, tours, automatic updates, USB discovery/copy dialogs, saved UI state, display sorting, and random-color buttons are outside the build configuration. Image conversion/rotation assembly and explicit colors are included above. |
 

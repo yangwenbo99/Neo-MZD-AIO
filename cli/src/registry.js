@@ -45,6 +45,19 @@ export const installerSchema = object({
   skip_confirmation: bool(false), apps_to_resources: bool(false), retrieve_cmu_data: bool(false), self_destruct: bool(false)
 })
 
+export const autorunSchema = object({
+  mode: choice(['install', 'serial', 'dry_run'], 'install'),
+  id7_recovery: { ...bool(true), modes: ['install'] },
+  wifi_ap: { ...object({
+    enabled: bool(false),
+    ssid: { type: 'string', singleLine: true },
+    password: { type: 'string', singleLine: true, secret: true }
+  }), modes: ['install', 'serial'] },
+  ssh_over_adb: { ...bool(false), modes: ['install', 'serial'] },
+  include_dry_run: { ...bool(false), modes: ['install'] },
+  skip_confirmation: { ...bool(false), modes: ['install'] }
+})
+
 const metric = choice([...metrics.map(row => row[0]), 'none'])
 const controls = view => object(Object.fromEntries(bindings.map((key, index) => [key, choice(actions[view], actions[view][index])])))
 const speedometer = {

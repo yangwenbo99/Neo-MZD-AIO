@@ -1,0 +1,6 @@
+schema_version: 1
+autorun:
+  mode: serial
+  ssh_over_adb: false
+  wifi_ap:
+    enabled: false

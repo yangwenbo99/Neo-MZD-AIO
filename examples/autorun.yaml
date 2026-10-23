@@ -1,0 +1,9 @@
+schema_version: 1
+autorun:
+  mode: install
+  id7_recovery: true
+  ssh_over_adb: true
+  include_dry_run: true
+  skip_confirmation: false
+  wifi_ap:
+    enabled: false

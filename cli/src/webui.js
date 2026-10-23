@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process'
 import { stringify } from 'yaml'
 import sharp from 'sharp'
 import xml2js from 'xml2js'
-import { registry, installerSchema, object } from './registry.js'
+import { registry, installerSchema, autorunSchema, object } from './registry.js'
 import { normalizeConfig, parseConfig } from './config.js'
 import { createPlan, validatePlan, formatPlan } from './plan.js'
 import { repoRoot, tweakRoot } from './resources.js'
@@ -105,7 +105,7 @@ export async function startWebUI ({ filename, port = 0, cwd = process.cwd() } = 
         response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
         return response.end(await readFile(path.join(repoRoot, 'docs/CLI-TWEAKS.md')))
       }
-      if (request.method === 'GET' && url.pathname === '/api/catalog') return json({ initial, cwd, installer: installerSchema, resources: resourceSchema, tweaks: definitions })
+      if (request.method === 'GET' && url.pathname === '/api/catalog') return json({ initial, cwd, installer: installerSchema, autorun: autorunSchema, resources: resourceSchema, tweaks: definitions })
       if (request.method === 'GET' && url.pathname === '/api/browse') {
         const directory = path.resolve(cwd, url.searchParams.get('path') || cwd)
         const base = path.dirname(filenameAt(url.searchParams.get('filename') || initial.filename, cwd))
@@ -133,7 +133,9 @@ export async function startWebUI ({ filename, port = 0, cwd = process.cwd() } = 
       const target = filenameAt(body.filename, cwd)
       if (url.pathname === '/api/load') return json(await loadDraft(target))
       if (url.pathname === '/api/example') {
-        const example = await loadDraft(path.join(repoRoot, 'examples/tweaks.yaml'))
+        const name = { tweaks: 'tweaks', install: 'autorun', serial: 'serial', dry_run: 'autorun-test' }[body.mode || 'tweaks']
+        if (!name) throw new Error('Unknown package example')
+        const example = await loadDraft(path.join(repoRoot, `examples/${name}.yaml`))
         return json({ filename: target, config: relocateConfig(example.config, example.filename, target) })
       }
       if (url.pathname === '/api/relocate') return json({ filename: target, config: relocateConfig(body.config, filenameAt(body.fromFilename, cwd), target) })

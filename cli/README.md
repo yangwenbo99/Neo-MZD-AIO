@@ -26,6 +26,21 @@ It supports all 40 tweaks, nested options, local asset browsing, image previews,
 live YAML validation, and saving to a chosen config path. Changing the save path
 rebases relative asset references. **Use example** starts a draft at that path.
 
+Use the **Package type** selector for **CMU-autorun installer**, **Serial access
+(XX)**, or **Autorun test (dry run)**. The installer provides ID7 recovery,
+automatic Wi-Fi AP with SSID/passphrase fields, SSH-over-ADB, and a success-dialog
+test script. These package types use a separate `autorun` configuration:
+
+```sh
+node cli/bin/mzd-aio.js configure examples/autorun.yaml
+node cli/bin/mzd-aio.js list autorun
+node cli/bin/mzd-aio.js build examples/autorun.yaml --output ./autorun-installation
+```
+
+See [autorun and recovery packages](../docs/CLI.md#autorun-and-recovery-packages)
+for setup and the serial-access and standalone-test examples. AP mode hosts the
+car's network; leave it disabled to use normal Wi-Fi client connections.
+
 See the [user guide](../docs/CLI.md), [complete catalogue and option reference](../docs/CLI-TWEAKS.md),
 and [example configuration](../examples/tweaks.yaml).
 

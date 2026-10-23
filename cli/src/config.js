@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parseDocument } from 'yaml'
-import { registry, installerSchema, object } from './registry.js'
+import { registry, installerSchema, autorunSchema, object } from './registry.js'
 
 const own = (value, key) => Object.hasOwn(value, key)
 const mapping = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -52,8 +52,23 @@ export function normalize (schema, input, location, base) {
 export function normalizeConfig (input, filename) {
   const base = path.dirname(path.resolve(filename))
   if (!mapping(input)) fail('configuration', 'expected a mapping')
-  for (const key of Object.keys(input)) if (!['schema_version', 'installer', 'resources', 'tweaks'].includes(key)) fail(key, 'unknown top-level setting')
+  for (const key of Object.keys(input)) if (!['schema_version', 'installer', 'resources', 'tweaks', 'autorun'].includes(key)) fail(key, 'unknown top-level setting')
   if (input.schema_version !== 1) fail('schema_version', 'must be 1')
+  if (own(input, 'autorun')) {
+    if (!mapping(input.autorun)) fail('autorun', 'expected a mapping')
+    for (const key of ['installer', 'resources', 'tweaks']) if (own(input, key)) fail(key, 'cannot be combined with autorun; use a separate configuration')
+    const autorun = normalize(autorunSchema, input.autorun, 'autorun', base)
+    for (const [key, field] of Object.entries(autorunSchema.fields)) {
+      if (own(input.autorun, key) && field.modes && !field.modes.includes(autorun.mode)) fail(`autorun.${key}`, `not available in ${autorun.mode} mode`)
+      if (field.modes && !field.modes.includes(autorun.mode)) delete autorun[key]
+    }
+    const ap = autorun.wifi_ap
+    if (ap?.enabled) {
+      if (typeof ap.ssid !== 'string' || !ap.ssid.isWellFormed() || /[\x00-\x1f\x7f]/.test(ap.ssid) || Buffer.byteLength(ap.ssid) < 1 || Buffer.byteLength(ap.ssid) > 32 || ap.ssid === 'YourSSID') fail('autorun.wifi_ap.ssid', 'expected an SSID of 1–32 UTF-8 bytes, without control characters or the YourSSID placeholder')
+      if (typeof ap.password !== 'string' || !/^[\x20-\x7e]{8,63}$/.test(ap.password) || ap.password === 'YourSSIDpassword') fail('autorun.wifi_ap.password', 'expected a WPA2 passphrase of 8–63 printable ASCII characters, without the YourSSIDpassword placeholder')
+    }
+    return { schema_version: 1, autorun }
+  }
   if (!mapping(input.tweaks) || !Object.keys(input.tweaks).length) fail('tweaks', 'expected a nonempty mapping')
   const installer = normalize(installerSchema, input.installer, 'installer', base)
   const resources = normalize(object({ color_schemes: { type: 'path', kind: 'directory' } }), input.resources, 'resources', base)

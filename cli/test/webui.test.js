@@ -29,6 +29,8 @@ test('WebUI serves the CLI catalogue, defaults, local assets and complete option
   assert.equal(response.status, 200)
   assert.deepEqual(Object.keys(value.tweaks), Object.keys(registry))
   assert.equal(value.installer.fields.keep_backups.default, true)
+  assert.equal(value.autorun.fields.id7_recovery.default, true)
+  assert.deepEqual(value.autorun.fields.mode.values, ['install', 'serial', 'dry_run'])
   assert.equal(value.tweaks.speedometer.options.fields.speed_unit.default, 'kmh')
   assert.equal(value.tweaks.speedometer.options.fields.fuel_tank_capacity.max, undefined)
   assert.equal(value.tweaks.message_replies.options.fields.messages.presets.US_English.length, 15)
@@ -143,6 +145,40 @@ test('invalid YAML, conflicting selections and bad save paths are reported witho
   assert.equal((await editor.request('/api/save', { config, filename: 'bad.yaml' })).response.status, 400)
   assert.equal((await editor.request('/api/save', { config: { schema_version: 1, tweaks: { main_menu_loop: { action: 'install' } } }, filename: 'not-yaml.js' })).response.status, 400)
   assert.deepEqual(await readdir(editor.directory), ['invalid.yaml'])
+})
+
+test('WebUI loads, previews, saves and validates all autorun package modes', async t => {
+  const editor = await setup(t)
+  const filename = path.join(editor.directory, 'recovery.yaml')
+  for (const [mode, name] of [['install', 'autorun'], ['serial', 'serial'], ['dry_run', 'autorun-test']]) {
+    const example = await editor.request('/api/example', { filename, mode })
+    assert.equal(example.response.status, 200)
+    const expected = await loadConfig(path.join(repoRoot, `examples/${name}.yaml`))
+    assert.deepEqual(normalizeConfig(example.value.config, filename), expected)
+    const preview = await editor.request('/api/preview', example.value)
+    assert.equal(preview.value.error, null)
+    assert.deepEqual(parseConfig(preview.value.yaml), example.value.config)
+    const validation = await editor.request('/api/validate', example.value)
+    assert.equal(validation.response.status, 200)
+    assert.match(validation.value.plan, new RegExp(`Autorun/recovery package: ${mode}`))
+    assert.equal((await editor.request('/api/save', example.value)).response.status, 200)
+    assert.deepEqual((await editor.request('/api/load', { filename })).value.config, example.value.config)
+  }
+  const config = { schema_version: 1, autorun: { mode: 'serial', ssh_over_adb: true, wifi_ap: { enabled: true, ssid: 'My Car', password: "my ' password" } } }
+  const validation = await editor.request('/api/validate', { filename, config })
+  assert.equal(validation.response.status, 200)
+  assert.match(validation.value.plan, /XX\/02-start-wifiAP/)
+  assert.match(validation.value.plan, /SSH-over-ADB/)
+  assert.ok(!validation.value.plan.includes(config.autorun.wifi_ap.password))
+  assert.equal((await editor.request('/api/save', { filename, config })).response.status, 200)
+  const relocated = await editor.request('/api/relocate', { config, fromFilename: filename, filename: path.join(editor.directory, 'nested/copy.yaml') })
+  assert.deepEqual(relocated.value.config, config)
+  for (const invalid of [
+    { ...config, tweaks: {} },
+    { schema_version: 1, autorun: { mode: 'install', wifi_ap: { enabled: true } } },
+    { schema_version: 1, autorun: { mode: 'serial', include_dry_run: true } }
+  ]) assert.equal((await editor.request('/api/save', { filename, config: invalid })).response.status, 400)
+  assert.deepEqual(parseConfig(await readFile(filename, 'utf8')), config)
 })
 
 test('configure command starts with an existing YAML and stops cleanly', async t => {

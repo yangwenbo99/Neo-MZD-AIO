@@ -1,6 +1,7 @@
 # YAML CLI user guide
 
-The standalone CLI supports the 40-entry ordinary-tweak catalogue below.
+The standalone CLI supports the 40-entry ordinary-tweak catalogue below and
+CMU-autorun, ID7 recovery, serial-access, and autorun-test packages.
 
 Build a USB installation package from a YAML file using the scripts and payloads
 in this checkout. Settings come from the configuration and documented defaults,
@@ -52,8 +53,10 @@ node cli/bin/mzd-aio.js configure --port 9040 --no-open
 Keep the command running while editing; press **Ctrl+C** in the terminal to stop.
 The editor runs offline using the CLI's existing dependencies and option registry.
 
-1. Set the **Configuration file** path. **Open YAML** loads an existing local file;
-   **Use example** fills a draft at the current save path using the bundled example.
+1. Choose a **Package type**: ordinary tweaks, CMU-autorun installer, serial access
+   (`XX`), or autorun test. Set the **Configuration file** path. **Open YAML** loads
+   an existing local file; **Use example** fills a draft for the selected package
+   type at the current save path.
 2. Search the catalogue and select **Unchanged**, **Install**, or **Uninstall**.
    Choose a tweak's name to edit it. Installer settings and resource packs have
    their own tabs. Nested option groups expand to show layouts, bindings, palettes,
@@ -75,6 +78,70 @@ Saving reformats the YAML; comments and original formatting are not retained.
 Use **Copy** to copy the preview instead. After saving, build the package using
 the `build` command above.
 
+## Autorun and recovery packages
+
+In the WebUI, choose **CMU-autorun installer** under **Package type** to open the
+**Autorun / Recovery** section. It provides ID7 recovery, automatic Wi-Fi AP,
+SSH-over-ADB, an optional autorun test script, and the original installer prompts.
+The ID7 pack is enabled by default; the AP and ADB options are opt-in.
+
+The same `validate`, `plan`, and `build` commands handle these package types:
+
+```sh
+node cli/bin/mzd-aio.js list autorun
+node cli/bin/mzd-aio.js configure examples/autorun.yaml
+node cli/bin/mzd-aio.js validate examples/autorun.yaml
+node cli/bin/mzd-aio.js plan examples/autorun.yaml
+node cli/bin/mzd-aio.js build examples/autorun.yaml --output ./autorun-installation
+```
+
+| Configuration | Package contents / use |
+| --- | --- |
+| [autorun.yaml](../examples/autorun.yaml) | USB installer for CMU-autorun, ID7 recovery, and SSH-over-ADB, plus a `run.sh` test. The example leaves automatic Wi-Fi AP disabled. |
+| [serial.yaml](../examples/serial.yaml) | `XX/` containing autorun and ID7 recovery core files for manual installation through a serial connection. Optional AP and ADB payloads also go inside `XX/`. |
+| [autorun-test.yaml](../examples/autorun-test.yaml) | Standalone `run.sh` that displays an **AUTORUN ACTIVATED** dialog when executed by an existing autorun setup. |
+
+An autorun configuration uses the top-level `autorun` mapping instead of
+`tweaks`, `installer`, and `resources`. Ordinary tweaks and recovery packages are
+separate build requests. For example:
+
+```yaml
+schema_version: 1
+autorun:
+  mode: install
+  id7_recovery: true
+  ssh_over_adb: false
+  include_dry_run: true
+  skip_confirmation: false
+  wifi_ap:
+    enabled: false
+```
+
+The installer replaces the existing autorun/recovery script directories with the
+selected payloads. Use the original vehicle-side **Install** choice to install
+them. Serial mode supplies core files for the project's
+[serial-access procedure](https://mazdatweaks.com/serial/); it generates no USB
+installer or bootstrap. Firmware-specific instructions are also linked from the
+project's [ID7 recovery guide](https://mazdatweaks.com/id7/).
+
+To enable an automatic AP, set `autorun.wifi_ap.enabled: true` and supply `ssid`
+and `password` in that mapping. It starts the car's access point and DHCP server
+on boot, using channel 9, WPA2/AES, and `192.168.53.1`. Hosting this AP changes the
+Wi-Fi role from joining another network to providing one; leave it disabled for
+normal Wi-Fi client use. Credentials are stored in the YAML and generated
+`02-start-wifiAP/wifiAP.config`; the build plan and compilation log omit them.
+
+SSH-over-ADB uses the bundled vehicle-side ADB executable and reverses Android
+port `2222` to the car's SSH port `22`. It requires an Android device with USB
+debugging enabled and an available SSH service on the car; the ID7 pack includes
+the SSH-startup scripts. Connect from the Android SSH client to `localhost:2222`.
+
+The dry-run package tests autorun execution; it is not an installation simulation.
+Copy its `run.sh` to the root of a USB drive or SD card used by the existing
+autorun setup. `include_dry_run` adds the same test alongside an installer for use
+after installation. Full field defaults and mode constraints are in the
+[autorun option reference](CLI-TWEAKS.md#autorun-and-recovery-packages).
+
 ## Commands
 
 The executable name is `mzd-aio`; the commands above invoke it directly
@@ -82,7 +149,7 @@ with Node.js from the checkout.
 
 | Command | Behavior |
 | --- | --- |
-| `list [TWEAK]` | List tweak names and supported actions; with a name, show its options, allowed values, and defaults. |
+| `list [NAME]` | List tweaks and package support; with a tweak name or `autorun`, show its options, allowed values, and defaults. |
 | `validate CONFIG` | Check YAML, settings, selections, and required local resources. |
 | `plan CONFIG` | Validate and show requested actions, shared dependencies, and script execution order. |
 | `build CONFIG --output DIRECTORY` | Validate and assemble a complete installation package. The output directory must not already exist. |
@@ -96,10 +163,11 @@ usage.
 
 ## Configuration
 
-The top-level fields are `schema_version`, `installer`, `resources`, and `tweaks`.
-`schema_version: 1` and a nonempty `tweaks` mapping are required. `installer` and
-individual installer settings are optional and use the defaults below. `resources`
-is optional unless the selected operations require an external resource pack.
+Every configuration requires `schema_version: 1` and either a nonempty `tweaks`
+mapping or an `autorun` mapping. Ordinary tweak configurations can also contain
+`installer` and `resources`; autorun configurations cannot contain those fields.
+Installer settings are optional and use the defaults below. `resources` is
+optional unless the selected tweaks require an external resource pack.
 
 Each tweak has a required action from the catalogue below. Configurable
 installs can include an `options` mapping; uninstall entries contain only `action`.
@@ -232,7 +300,8 @@ For a normal USB build, the output contains `tweaks.sh`, the existing bootstrap
 files, selected payloads under `config/`, removal payloads under `config_org/` when
 needed, and `MZD_LOG.md`, a compilation log with the build plan. The assembled
 installer uses LF line endings. A `run.sh` build uses
-the existing autorun-style package layout.
+the existing autorun-style package layout. The separate `autorun` package types
+and their output layouts are described above.
 
 Copy the **contents** of the output directory to the root of a FAT32 USB drive.
 The build command prepares files on the computer; the installation runs on the
@@ -264,4 +333,5 @@ npm run test:webui --prefix cli
 ```
 
 Set `CHROMIUM` if the browser executable has a different name or path. Screenshots
-are saved to `tmp/webui-desktop.png` and `tmp/webui-mobile.png`.
+are saved to `tmp/webui-desktop.png`, `tmp/webui-mobile.png`, and
+`tmp/webui-autorun.png`.

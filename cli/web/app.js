@@ -20,6 +20,14 @@ const hints = {
   'installer.apps_to_resources': 'Place application files on the resources partition.',
   'installer.retrieve_cmu_data': 'Include CMU diagnostic-data retrieval. Requires tweaks.sh.',
   'installer.self_destruct': 'Include the existing installation-file cleanup step.',
+  'autorun.id7_recovery': 'Include the bundled ID7 recovery scripts. Serial-access packages always include them.',
+  'autorun.ssh_over_adb': 'Start the bundled ADB bridge at boot. An Android device with USB debugging enabled can connect to localhost:2222.',
+  'autorun.include_dry_run': 'Add a run.sh success-dialog test for use after installing autorun. It can also be copied to a separate USB drive or SD card.',
+  'autorun.skip_confirmation': 'Skip the original vehicle-side install/uninstall and reboot prompts.',
+  'autorun.wifi_ap': 'Start the car as a Wi-Fi access point at boot: channel 9, WPA2/AES, IP 192.168.53.1. This changes its Wi-Fi role from joining another network to hosting one.',
+  'autorun.wifi_ap.enabled': 'Include the automatic access-point boot scripts. Leave disabled to retain normal Wi-Fi client use.',
+  'autorun.wifi_ap.ssid': 'Required when AP is enabled: 1–32 UTF-8 bytes, without control characters.',
+  'autorun.wifi_ap.password': 'Required when AP is enabled: 8–63 printable ASCII characters. Stored in the YAML and generated wifiAP.config.',
   'resources.color_schemes': 'Optional unpacked color pack. Needed for color schemes and theme removal (Red/jci.zip).',
   'tweaks.theme.options': 'Choose either an archive or a custom jci directory.',
   'tweaks.remove_overlays.options': 'Select at least one overlay to remove.',
@@ -32,7 +40,23 @@ const hints = {
 
 let catalog, config, filename, active = 'installer', busy = false, valid = false, revision = 0, timer, fieldID = 0, resourceRevision = -1
 let cachedOptions = {}
+let packageDrafts = {}
 let browserState
+const packageMode = () => config.autorun ? config.autorun.mode || 'install' : 'tweaks'
+const packageDescriptions = {
+  install: 'Install CMU-autorun with optional ID7 recovery, Wi-Fi access point, and SSH-over-ADB. Output includes the original USB installer.',
+  serial: 'Create XX/ with CMU-autorun and ID7 recovery core files for manual installation through an existing serial connection.',
+  dry_run: 'Create run.sh to show an AUTORUN ACTIVATED success dialog. Run it using an already-installed autorun setup.'
+}
+
+function selectPackage (mode) {
+  packageDrafts[packageMode()] = structuredClone(config)
+  config = structuredClone(packageDrafts[mode] || (mode === 'tweaks' ? { schema_version: 1, tweaks: {} } : { schema_version: 1, autorun: { mode } }))
+  active = mode === 'tweaks' ? 'installer' : 'autorun'
+  cachedOptions = {}
+  changed()
+  renderEditor()
+}
 
 async function api (route, body) {
   const response = await fetch(route, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -82,7 +106,7 @@ function schedulePreview () {
       $('yaml').value = result.yaml
       valid = !result.error
       $('validation').className = `validation ${valid ? 'valid' : 'invalid'}`
-      $('validation').textContent = result.error || (resourceRevision === revision ? 'Configuration and required local resources are valid.' : `Configuration valid · ${Object.keys(config.tweaks).length} selected tweaks. Local resources can be checked below.`)
+      $('validation').textContent = result.error || (resourceRevision === revision ? 'Configuration and required local resources are valid.' : `Configuration valid · ${config.autorun ? `autorun ${packageMode()} package` : `${Object.keys(config.tweaks).length} selected tweaks`}. Local resources can be checked below.`)
       updateButtons()
     } catch (error) {
       if (current === revision) { valid = false; $('validation').textContent = error.message; $('validation').className = 'validation invalid'; updateButtons() }
@@ -94,6 +118,9 @@ function loadState (result, message) {
   config = result.config
   filename = result.filename
   cachedOptions = {}
+  packageDrafts = {}
+  if (config.autorun) active = 'autorun'
+  else if (active === 'autorun') active = 'installer'
   $('filename').value = filename
   $('base-directory').textContent = `Relative assets resolve from: ${filename.replace(/[/\\][^/\\]+$/, '')}`
   revision++
@@ -136,6 +163,15 @@ function actionSelect (name) {
 
 function updateSidebar () {
   if (!catalog) return
+  const autorun = Boolean(config.autorun)
+  $('package-kind').value = packageMode()
+  $('tweak-catalog').hidden = autorun
+  $('package-summary').hidden = !autorun
+  $('package-summary').textContent = packageDescriptions[packageMode()] || ''
+  $('installer-tab').hidden = autorun
+  $('resources-tab').hidden = autorun
+  $('autorun-tab').hidden = !autorun
+  if (autorun) { $('tweak-list').replaceChildren(); return }
   $('selection-count').textContent = `${Object.keys(config.tweaks).length} / ${Object.keys(catalog.tweaks).length}`
   const query = $('search').value.toLowerCase().trim()
   const items = []
@@ -264,7 +300,8 @@ function renderField (key, schema, get, set, location) {
       control.checked = current() ?? false
       fieldLabel.prepend(control)
     } else {
-      control.type = schema.type === 'number' ? 'number' : 'text'
+      control.type = schema.secret ? 'password' : schema.type === 'number' ? 'number' : 'text'
+      if (schema.secret) control.autocomplete = 'new-password'
       control.value = current() ?? ''
       if (schema.type === 'number') {
         if (Number.isFinite(schema.min)) control.min = schema.min
@@ -314,7 +351,14 @@ function renderField (key, schema, get, set, location) {
 function renderEditor () {
   $('installer-tab').classList.toggle('active', active === 'installer')
   $('resources-tab').classList.toggle('active', active === 'resources')
+  $('autorun-tab').classList.toggle('active', active === 'autorun')
   const area = $('editor-content')
+  if (active === 'autorun') {
+    area.replaceChildren(element('p', 'AUTORUN / RECOVERY', 'eyebrow'), element('h1', $('package-kind').selectedOptions[0].textContent), element('p', packageDescriptions[packageMode()], 'description'))
+    const fields = Object.fromEntries(Object.entries(catalog.autorun.fields).filter(([key, field]) => key !== 'mode' && field.modes?.includes(packageMode())))
+    area.append(renderFields({ fields }, () => config.autorun, value => { config.autorun = { ...value, mode: packageMode() } }, 'autorun'))
+    return
+  }
   if (active === 'installer' || active === 'resources') {
     const isInstaller = active === 'installer'
     area.replaceChildren(element('p', 'PACKAGE SETTINGS', 'eyebrow'), element('h1', isInstaller ? 'Installer settings' : 'Resource packs'), element('p', isInstaller ? 'Configure the vehicle-side installer. Untouched fields use the defaults shown.' : 'Point to optional resource packs already available on this computer. Individual images and theme archives are selected within their tweaks.', 'description'), renderFields(catalog[active], () => config[active], value => { if (value === undefined) delete config[active]; else config[active] = value }, active))
@@ -364,12 +408,14 @@ async function browseTo (directory, fallback = false) {
 
 $('search').addEventListener('input', updateSidebar)
 $('selected-only').addEventListener('change', updateSidebar)
+$('package-kind').addEventListener('change', () => selectPackage($('package-kind').value))
 $('installer-tab').addEventListener('click', () => { active = 'installer'; updateSidebar(); renderEditor() })
 $('resources-tab').addEventListener('click', () => { active = 'resources'; updateSidebar(); renderEditor() })
+$('autorun-tab').addEventListener('click', () => { active = 'autorun'; renderEditor() })
 $('set-path').addEventListener('click', () => operate(applyFilename))
 $('filename').addEventListener('keydown', event => { if (event.key === 'Enter') operate(applyFilename) })
 $('open').addEventListener('click', () => browse('config', '.', entry => operate(async () => loadState(await api('/api/load', { filename: entry.path }), 'Configuration loaded'))))
-$('example').addEventListener('click', () => operate(async () => { await applyFilename(); loadState(await api('/api/example', { filename }), 'Example loaded · unsaved changes') }))
+$('example').addEventListener('click', () => operate(async () => { await applyFilename(); loadState(await api('/api/example', { filename, mode: packageMode() }), 'Example loaded · unsaved changes') }))
 $('save').addEventListener('click', () => operate(async () => { await applyFilename(); const result = await api('/api/save', { config, filename }); $('yaml').value = result.yaml; fileStatus(`Saved ${result.filename}`) }))
 $('validate').addEventListener('click', () => operate(async () => {
   await applyFilename()

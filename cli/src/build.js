@@ -4,15 +4,16 @@ import xml2js from 'xml2js'
 import { readZip, renderImage, renderRotation } from './resources.js'
 import { variables, audioOrderFile, formatPlan } from './plan.js'
 import { speedometerFiles, metricClass } from './speedometer.js'
+import { autorunFile, autorunPermissions } from './autorun.js'
 
 const lf = value => value.replace(/\r\n?/g, '\n')
 const exists = async name => {
   try { await lstat(name); return true } catch (error) { if (error.code === 'ENOENT') return false; throw error }
 }
-const write = async (root, name, value) => {
+const write = async (root, name, value, mode = 0o644) => {
   const target = path.join(root, name)
   await mkdir(path.dirname(target), { recursive: true })
-  await writeFile(target, value, { mode: 0o644 })
+  await writeFile(target, value, { mode })
 }
 
 async function edit (root, name, transform) {
@@ -139,14 +140,17 @@ export async function buildPackage (plan, output, { onProgress = () => {} } = {}
           if (text) script.push(`\n# CLI: ${step.label}\n${text}`)
         } else if (step.kind === 'copy') {
           await mkdir(path.dirname(path.join(stage, step.target)), { recursive: true })
-          await cp(step.source, path.join(stage, step.target), { recursive: step.directory, preserveTimestamps: true })
+          await cp(step.source, path.join(stage, step.target), { recursive: step.directory, preserveTimestamps: true, ...(step.omitReadme ? { filter: source => !/\.md$/i.test(source) && path.basename(source) !== '_readme.txt' } : {}) })
+          if (step.autorunPermissions) await autorunPermissions(path.join(stage, step.target), step.directory)
+        } else if (step.kind === 'autorun_file') {
+          await write(stage, step.target, await autorunFile(step, plan.config), step.transform === 'wifi_config' ? 0o600 : 0o755)
         } else if (step.kind === 'theme') await theme(step, stage)
         else if (step.kind === 'zip') await readZip(step.source, path.join(stage, step.target))
         else if (step.kind === 'image') await renderImage(step.source, path.join(stage, step.target), step.width, step.height)
         else if (step.kind === 'rotation') await renderRotation(step.sources, path.join(stage, step.target))
       } catch (error) { throw new Error(`${step.label}: ${error.message}`) }
     }
-    await writeFile(path.join(stage, plan.config.installer.script_name), script.join(''), { mode: 0o755 })
+    if (!plan.config.autorun) await writeFile(path.join(stage, plan.config.installer.script_name), script.join(''), { mode: 0o755 })
     await write(stage, 'MZD_LOG.md', '# MZD-AIO CLI compilation log\n\n```text\n' + formatPlan(plan) + '\n```\n')
     if (await exists(output)) throw new Error(`output directory already exists: ${output}`)
     await rename(stage, output)
