@@ -126,7 +126,7 @@ export const registry = {
   fuel_consumption: entry('Fuel-consumption display', '22_fuel-i.txt', '22_fuel-u.txt', 'FuelConsumptionTweak', 'FuelConsumptionTweak', { unit: choice(['km_per_l', 'mpg', 'l_per_100km'], 'km_per_l') }),
   castscreen_receiver: entry('Castscreen receiver', '24_castscreen-i.txt', '24_castscreen-u.txt', 'castscreen-receiver'),
   android_auto: entry('Bundled headunit application', '25_androidauto-i.txt', '25_androidauto-u.txt', 'androidauto', null, {
-    wifi: bool(false), debug_logging: bool(false), gps_source: choice(['car', 'phone'], 'car'), reverse_heading: bool(false)
+    wifi: bool(false), debug_logging: bool(false), gps_source: choice(['car', 'phone'], 'car'), reverse_heading: bool(false), disable_touchscreen: bool(false)
   }, { application: true }),
   usb_audio_mod: entry('USB Audio Mod', '26_usbaudiomod-i.txt', '26_usbaudiomod-u.txt', 'USBAudioMod', 'USBAudioMod', { gracenote_text: { type: 'string', singleLine: true, default: 'Powered By Gracenote®' } }),
   aio_app: entry('AIO Tweaks App', '27_aioapp-i.txt', '27_aioapp-u.txt', 'aio-app', null, { screen_off_on_boot: bool(false) }, { application: true }),

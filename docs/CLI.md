@@ -232,7 +232,7 @@ represented by installer settings above.
 | `media_order_flac` | I/U | Media ordering patch and FLAC support. | T21 |
 | `fuel_consumption` | I/U | Additional fuel-consumption display and units. | T22 |
 | `castscreen_receiver` | I/U | Castscreen receiver application. | T24 |
-| `android_auto` | I/U | Bundled headunit application and its Wi-Fi, logging, and GPS options. | T25 |
+| `android_auto` | I/U | Bundled headunit application and its Wi-Fi, logging, GPS, and touchscreen options. | T25 |
 | `usb_audio_mod` | I/U | USB Audio Mod and Gracenote label. | T26 |
 | `aio_app` | I/U | AIO Tweaks App and optional screen-off-on-boot behavior. | T27 |
 | `mzd_meter` | I/U | Legacy MZD Meter application. | Extra: `user.mzdmeter` |

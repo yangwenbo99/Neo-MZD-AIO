@@ -83,6 +83,7 @@ test('registry covers the approved catalogue and source defaults', async () => {
   const documented = [...guide.matchAll(/^\| `([a-z_]+)` \| I(?:\/U)? \|/gm)].map(match => match[1])
   assert.equal(documented.length, 40)
   assert.deepEqual(new Set(Object.keys(registry)), new Set(documented))
+  assert.equal(config(input({ android_auto: install() })).tweaks.android_auto.options.disable_touchscreen, false)
   const source = {}
   vm.runInNewContext((await readFile(path.join(repoRoot, 'app/assets/js/spdValues.js'), 'utf8')).split('// Push Disable')[0], source)
   const defaults = config(input({ speedometer: install() })).tweaks.speedometer.options
@@ -149,7 +150,7 @@ test('all supported actions resolve local resources and assemble complete packag
     remove_overlays: { buttons: true }, theme: { archive: path.join(tweakRoot, 'config/themes/Mazda.zip') },
     boot_animation: { loop: 'matrix', transition: 'original', ending: 'cinema' },
     speedometer: { language: 'sk', speed_unit: 'mph', temperature_unit: 'f', fuel_gauge_unit: 'l', fuel_tank_capacity: 50, statusbar: { enabled: true, digital_clock: true, hide_in_reverse: true }, controls: { bar: { hold_left: 'toggle_statusbar' } } },
-    android_auto: { wifi: true, debug_logging: true, gps_source: 'phone' },
+    android_auto: { wifi: true, debug_logging: true, gps_source: 'phone', disable_touchscreen: true },
     aio_app: { screen_off_on_boot: true }, message_replies: { messages: { US_English: Array.from({ length: 15 }, (_, i) => `Reply ${i + 1} <&> "'`) } }
   }
   // Cover every ordinary install in one package, with exclusive choices tested below.
@@ -168,6 +169,7 @@ test('all supported actions resolve local resources and assemble complete packag
   for (const target of ['config/jci/opera/opera_dir/userjs/additionalApps.js', 'config/jci/gui/addon-common/websocketd', 'config/bin/node', 'config/mzdmeter/paa', 'config/bootanimation/jci/resources/TranLogoEndCinemma.ivf']) await access(path.join(output, target))
   const headunit = JSON.parse(await readFile(path.join(output, 'config/androidauto/data_persist/dev/bin/headunit.json'), 'utf8'))
   assert.equal(headunit.carGPS, false)
+  assert.equal(headunit.disableTouchscreen, true)
   for (const target of ['config/androidauto/data_persist/dev/bin/headunit-wrapper', 'config/androidautowifi/headunit-wrapper']) assert.match(await readFile(path.join(output, target), 'utf8'), /^DEBUG=1/m)
   const startup = await readFile(path.join(output, 'config/speedometer/jci/gui/apps/_speedometer/js/speedometer-startup.js'), 'utf8')
   new vm.Script(startup)

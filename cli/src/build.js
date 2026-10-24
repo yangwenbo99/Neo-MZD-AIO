@@ -69,7 +69,7 @@ async function generate (name, plan, root) {
   } else if (name === 'android_auto') {
     const target = 'config/androidauto/data_persist/dev/bin/headunit.json'
     const data = JSON.parse(await readFile(path.join(root, target), 'utf8'))
-    Object.assign(data, { carGPS: options.gps_source === 'car', reverseGPS: options.reverse_heading })
+    Object.assign(data, { carGPS: options.gps_source === 'car', reverseGPS: options.reverse_heading, disableTouchscreen: options.disable_touchscreen })
     await write(root, target, JSON.stringify(data, null, 2) + '\n')
     await edit(root, 'config/androidauto/data_persist/dev/bin/headunit-wrapper', text => text.replace(/^DEBUG=\d+/m, `DEBUG=${options.debug_logging ? 1 : 0}`))
   } else if (name === 'androidautowifi') {

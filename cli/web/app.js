@@ -35,7 +35,8 @@ const hints = {
   'tweaks.speedometer.options.bottom_rows': 'Move or hide values assigned to removed rows before reducing this number.',
   'tweaks.speedometer.options.fuel_tank_capacity': 'Required for fuel gauge units l or gal; enter capacity in the selected unit.',
   'tweaks.main_menu.options.small_focus': 'Requires Small coins.',
-  'tweaks.android_auto.options.reverse_heading': 'Requires GPS source: car.'
+  'tweaks.android_auto.options.reverse_heading': 'Requires GPS source: car.',
+  'tweaks.android_auto.options.disable_touchscreen': 'Disable touchscreen input in Android Auto.'
 }
 
 let catalog, config, filename, active = 'installer', busy = false, valid = false, revision = 0, timer, fieldID = 0, resourceRevision = -1

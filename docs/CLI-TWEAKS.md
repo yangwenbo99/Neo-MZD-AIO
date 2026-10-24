@@ -286,6 +286,7 @@ swap are outside this interface.
 | `debug_logging` | Boolean. | `false` |
 | `gps_source` | `car`, `phone`. | `car` |
 | `reverse_heading` | Boolean; requires `gps_source: car`. | `false` |
+| `disable_touchscreen` | Boolean; disables touchscreen input in Android Auto (`disableTouchscreen` in headunit.json). | `false` |
 
 **Note:** the following things are known to interfere with wireless Android Auto on my car:
 - Bluetooth: it must be disabled, otherwise the connection quality is too poor to establish AA connection
