@@ -99,7 +99,7 @@ function AIOTweaksTmplt(uiaId, parentDiv, templateID, controlProperties) {
   $("<button/>").attr("id", "headunitLogBtn").addClass('aaLog').html('<a>View Headunit Log</a>').appendTo($('#Tweaks'));
   $("<br>").appendTo($('#Tweaks'));
   $('<div/>').attr('id', 'aaTitle').html('Android Auto Headunit').appendTo('#Tweaks');
-  $("<button/>").attr("id", "AAstart").addClass('aaFunc fnStart').html('<a>Start</a>').appendTo($('#Tweaks'));
+  $("<button/>").attr("id", "AAstart").addClass('aaFunc fnStart').html('<a>(re)start</a>').appendTo($('#Tweaks'));
   $("<button/>").attr("id", "AAstop").addClass('aaFunc fnStop').html('<a>Stop</a>').appendTo($('#Tweaks'));
   $('<div/>').attr('id', 'csTitle').html('CastScreen Receiver').appendTo('#Tweaks');
   $("<button/>").attr("id", "CSstart").addClass('csFunc fnStart').html('<a>Start</a>').appendTo($('#Tweaks'));

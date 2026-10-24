@@ -507,16 +507,18 @@ function enableCompass() {
 }
 
 function startHeadunit() {
-  showAioInfo("$ headunit-wrapper 2>&1 &");
-  // AArunning = true;
-  // showAioInfo("$ headunit-wrapper 2>&1 &");
-  // aioWs('/tmp/mnt/data_persist/dev/bin/headunit-wrapper 2>&1 & ', 30);
-  aioWs("headunit-wrapper 2>&1 &", 10);
+  var command = "killall -q -9 headunit-wrapper; killall -q -9 headunit; " +
+    "rm -f /tmp/root/headunit.json /tmp/root/headunit.status /tmp/root/headunit-wireless.status; " +
+    "/tmp/mnt/data_persist/dev/bin/headunit-wrapper >/dev/null 2>&1 &";
+  showAioInfo("$ " + command);
+  aioWs(command, 0);
 }
 
 function stopHeadunit() {
-  showAioInfo("$ killall headunit-wrapper headunit 2>&1");
-  aioWs("killall headunit-wrapper headunit 2>&1", 1);
+  var command = "killall -q -9 headunit-wrapper; killall -q -9 headunit; " +
+    "rm -f /tmp/root/headunit.json /tmp/root/headunit.status /tmp/root/headunit-wireless.status";
+  showAioInfo("$ " + command);
+  aioWs(command, 0);
 }
 
 function startCastScreen() {
